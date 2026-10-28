@@ -1,18 +1,35 @@
 # SAP-onboard
 
-Ansible playbooks for onboarding users to the SAP automation team in Ansible Automation Platform (AAP) / AWX.
+Ansible playbooks for setting up the SAP organization in Ansible Automation Platform (AAP) / AWX and onboarding users to it.
 
 | Playbook | Purpose |
 |---|---|
-| `add_user_to_team.yml` | Adds a user to TEAM SAP Executable and grants the team its access. |
+| `setup_sap_controller.yml` | Creates the SAP organization, its teams, project, inventories and test users. |
+| `add_user_to_team.yml` | Adds a user to the SAP Executable team and grants the team its access. |
 | `create_onboarding_survey.yml` | Adds a survey to the **SAP Onboarding** job template that prompts for the inputs `add_user_to_team.yml` needs. |
+
+Run `setup_sap_controller.yml` first; the other playbooks expect the objects it creates.
+
+## setup_sap_controller.yml
+
+`setup_sap_controller.yml` creates the base objects on the automation controller:
+
+| Object | Name(s) | Details |
+|---|---|---|
+| Organization | SAP | – |
+| Teams | SAP Development, SAP Executable | In SAP |
+| Project | sap | Git, `https://github.com/TheLawGit/SAP-onboard.git`, branch `main`, updates from git on every job launch |
+| Inventories | SAP NonProd, SAP PROD | In SAP, created empty |
+| Users | sap-test-1, sap-test-2 | Members of the SAP organization |
+
+Objects that already exist are left as they are, and existing users' passwords are not reset.
 
 ## add_user_to_team.yml
 
 `add_user_to_team.yml` runs against the automation controller API and:
 
-1. **Adds a user to the team.** Adds the user given in `username` as a member of the team **TEAM SAP Executable** in the **SAP Executable** organization. The team is looked up by name *and* organization, so a same-named team in another organization is never picked.
-2. **Lets the team run SAP Development job templates.** Grants the team the organization-level **Execute** role on **SAP Development**. Team members can launch every job template (and workflow job template) in that organization, including ones created later. They can't edit them.
+1. **Adds a user to the team.** Adds the user given in `username` as a member of the team **SAP Executable** in the **SAP** organization. The team is looked up by name *and* organization, so a same-named team in another organization is never picked.
+2. **Lets the team run SAP job templates.** Grants the team the organization-level **Execute** role on **SAP**. Team members can launch every job template (and workflow job template) in that organization, including ones created later. They can't edit them.
 3. **Gives the team read access to inventories.** Grants the team the **Read** role on each inventory named in `sap_inventories`. Team members can view hosts, groups and variables but can't change them. This step is skipped if the list is empty.
 
 Every step is idempotent: re-running the playbook changes nothing if the access is already in place.
@@ -34,12 +51,12 @@ The survey variables match `add_user_to_team.yml`. When the SAP Onboarding job t
   ```bash
   ansible-galaxy collection install ansible.controller
   ```
-- A controller account allowed to manage team membership and roles in the organizations above.
+- A controller account allowed to create organizations, teams, projects, inventories and users, and to manage roles.
 - AAP 2.x / AWX 15 or newer.
 
 ## Connecting to the controller
 
-Connection details come from environment variables, so no credentials are stored in the playbook:
+Connection details come from environment variables, so no credentials are stored in the playbooks:
 
 ```bash
 export CONTROLLER_HOST=https://aap.example.com
@@ -50,18 +67,26 @@ export CONTROLLER_VERIFY_SSL=false      # optional, for self-signed certificates
 
 ## Usage
 
-### add_user_to_team.yml
+### setup_sap_controller.yml
 
-Add a user to the team and grant Execute on SAP Development:
+The test users need a password, passed as a variable so it isn't stored in the repo:
 
 ```bash
-ansible-playbook add_user_to_team.yml -e "username=jdoe"
+ansible-playbook setup_sap_controller.yml -e "sap_user_password=<password>"
+```
+
+### add_user_to_team.yml
+
+Add a user to the team and grant Execute on SAP:
+
+```bash
+ansible-playbook add_user_to_team.yml -e "username=sap-test-1"
 ```
 
 Also grant Read on specific inventories (lists must be passed as JSON or from a vars file):
 
 ```bash
-ansible-playbook add_user_to_team.yml -e '{"username": "jdoe", "sap_inventories": ["SAP Prod", "SAP QA"]}'
+ansible-playbook add_user_to_team.yml -e '{"username": "sap-test-1", "sap_inventories": ["SAP NonProd", "SAP PROD"]}'
 ```
 
 ### create_onboarding_survey.yml
@@ -72,15 +97,25 @@ ansible-playbook create_onboarding_survey.yml
 
 ## Variables
 
+### setup_sap_controller.yml
+
+| Variable | Default | Description |
+|---|---|---|
+| `sap_user_password` | *(required)* | Password set on newly created test users. |
+| `sap_organization` | `SAP` | Organization to create. |
+| `sap_teams` | `SAP Development`, `SAP Executable` | Teams to create in the organization. |
+| `sap_project` | `sap` → this repo, branch `main` | Project name, git URL and branch. |
+| `sap_inventories_to_create` | `SAP NonProd`, `SAP PROD` | Inventories to create in the organization. |
+| `sap_users` | `sap-test-1`, `sap-test-2` | Users to create and add to the organization. |
+
 ### add_user_to_team.yml
 
 | Variable | Default | Description |
 |---|---|---|
 | `username` | *(required)* | Controller user to add to the team. |
 | `sap_inventories` | `[]` | Inventory names the team gets Read on. |
-| `team_name` | `TEAM SAP Executable` | Team the user is added to. |
-| `organization` | `SAP Executable` | Organization the team belongs to. |
-| `job_template_organization` | `SAP Development` | Organization whose job templates the team can execute. |
+| `team_name` | `SAP Executable` | Team the user is added to. |
+| `organization` | `SAP` | Organization the team belongs to, and whose job templates the team can execute. |
 
 ### create_onboarding_survey.yml
 
@@ -89,6 +124,11 @@ ansible-playbook create_onboarding_survey.yml
 | `job_template_name` | `SAP Onboarding` | Job template the survey is added to. |
 
 ## Notes
+
+### setup_sap_controller.yml
+
+- The test users are added to the SAP organization but not to either team; use `add_user_to_team.yml` for that.
+- The **SAP Onboarding** job template is not created; create it from the `sap` project before running `create_onboarding_survey.yml`.
 
 ### add_user_to_team.yml
 

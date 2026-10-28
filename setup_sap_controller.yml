@@ -1,0 +1,91 @@
+---
+# Creates the base SAP objects in Ansible Automation Platform / AWX:
+#   Organization:  SAP
+#   Teams:         SAP Development, SAP Executable
+#   Project:       sap  (git: https://github.com/TheLawGit/SAP-onboard.git)
+#   Inventories:   SAP NonProd, SAP PROD
+#   Users:         sap-test-1, sap-test-2  (added as members of the SAP organization)
+#
+# Usage:
+#   ansible-playbook setup_sap_controller.yml -e "sap_user_password=<password>"
+#
+# Controller connection is read from environment variables:
+#   CONTROLLER_HOST, CONTROLLER_USERNAME, CONTROLLER_PASSWORD (or CONTROLLER_OAUTH_TOKEN)
+#   CONTROLLER_VERIFY_SSL=false   # optional, for self-signed certs
+#
+# Requires: ansible-galaxy collection install ansible.controller   (or awx.awx)
+
+- name: Set up SAP organization on the automation controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    sap_organization: "SAP"
+    sap_teams:
+      - "SAP Development"
+      - "SAP Executable"
+    sap_project:
+      name: "sap"
+      scm_url: "https://github.com/TheLawGit/SAP-onboard.git"
+      scm_branch: "main"
+    sap_inventories_to_create:
+      - "SAP NonProd"
+      - "SAP PROD"
+    sap_users:
+      - "sap-test-1"
+      - "sap-test-2"
+
+  tasks:
+    - name: Ensure a password for the test users was provided
+      ansible.builtin.assert:
+        that:
+          - sap_user_password is defined
+          - sap_user_password | length > 0
+        fail_msg: "Pass the test user password with -e sap_user_password=<password>"
+
+    - name: Create organization {{ sap_organization }}
+      ansible.controller.organization:
+        name: "{{ sap_organization }}"
+        state: present
+
+    - name: Create teams in {{ sap_organization }}
+      ansible.controller.team:
+        name: "{{ item }}"
+        organization: "{{ sap_organization }}"
+        state: present
+      loop: "{{ sap_teams }}"
+
+    - name: Create project {{ sap_project.name }}
+      ansible.controller.project:
+        name: "{{ sap_project.name }}"
+        organization: "{{ sap_organization }}"
+        scm_type: git
+        scm_url: "{{ sap_project.scm_url }}"
+        scm_branch: "{{ sap_project.scm_branch }}"
+        scm_update_on_launch: true
+        state: present
+
+    - name: Create inventories in {{ sap_organization }}
+      ansible.controller.inventory:
+        name: "{{ item }}"
+        organization: "{{ sap_organization }}"
+        state: present
+      loop: "{{ sap_inventories_to_create }}"
+
+    - name: Create users
+      ansible.controller.user:
+        username: "{{ item }}"
+        password: "{{ sap_user_password }}"
+        update_secrets: false
+        state: present
+      loop: "{{ sap_users }}"
+      no_log: true
+
+    - name: Add users as members of {{ sap_organization }}
+      ansible.controller.role:
+        user: "{{ item }}"
+        organization: "{{ sap_organization }}"
+        role: member
+        state: present
+      loop: "{{ sap_users }}"

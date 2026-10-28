@@ -1,12 +1,12 @@
 ---
-# Adds a user to the "TEAM SAP Executable" team in Ansible Automation Platform / AWX,
-# and grants that team the organization-level Execute role on "SAP Development" so it can
+# Adds a user to the "SAP Executable" team in the "SAP" organization in Ansible Automation
+# Platform / AWX, and grants that team the organization-level Execute role on "SAP" so it can
 # run every job template in that organization, including ones created later.
 # Also grants the team Read on each inventory listed in sap_inventories.
 #
 # Usage:
 #   ansible-playbook add_user_to_team.yml -e "username=jdoe"
-#   ansible-playbook add_user_to_team.yml -e '{"username": "jdoe", "sap_inventories": ["SAP Prod", "SAP QA"]}'
+#   ansible-playbook add_user_to_team.yml -e '{"username": "jdoe", "sap_inventories": ["SAP NonProd", "SAP PROD"]}'
 #
 # Controller connection is read from environment variables:
 #   CONTROLLER_HOST, CONTROLLER_USERNAME, CONTROLLER_PASSWORD (or CONTROLLER_OAUTH_TOKEN)
@@ -14,15 +14,14 @@
 #
 # Requires: ansible-galaxy collection install ansible.controller   (or awx.awx)
 
-- name: Add user to TEAM SAP Executable
+- name: Add user to SAP Executable team
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    team_name: "TEAM SAP Executable"
-    organization: "SAP Executable"
-    job_template_organization: "SAP Development"
+    team_name: "SAP Executable"
+    organization: "SAP"
     # Inventory names to grant Read on; override with -e
     sap_inventories: []
 
@@ -48,10 +47,10 @@
         role: member
         state: present
 
-    - name: Allow {{ team_name }} to execute all job templates in {{ job_template_organization }}
+    - name: Allow {{ team_name }} to execute all job templates in {{ organization }}
       ansible.controller.role:
         team: "{{ team.id }}"
-        organization: "{{ job_template_organization }}"
+        organization: "{{ organization }}"
         role: execute
         state: present
 
