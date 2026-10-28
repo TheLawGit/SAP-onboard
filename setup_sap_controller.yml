@@ -5,9 +5,11 @@
 #   Project:       sap  (git: https://github.com/TheLawGit/SAP-onboard.git)
 #   Inventories:   SAP NonProd, SAP PROD
 #   Users:         sap-test-1, sap-test-2  (added as members of the SAP organization)
+#   Job template:  SAP Onboarding  (runs add_user_to_team.yml from the sap project)
 #
 # Usage:
-#   ansible-playbook setup_sap_controller.yml -e "sap_user_password=<password>"
+#   ansible-playbook setup_sap_controller.yml
+#   ansible-playbook setup_sap_controller.yml -e "sap_controller_credential=<credential name>"
 #
 # Controller connection is read from environment variables:
 #   CONTROLLER_HOST, CONTROLLER_USERNAME, CONTROLLER_PASSWORD (or CONTROLLER_OAUTH_TOKEN)
@@ -35,15 +37,16 @@
     sap_users:
       - "sap-test-1"
       - "sap-test-2"
+    sap_user_password: "Ansible123!"
+    sap_job_template:
+      name: "SAP Onboarding"
+      playbook: "add_user_to_team.yml"
+      inventory: "SAP NonProd"
+    # Name of an existing "Red Hat Ansible Automation Platform" credential that gives the
+    # SAP Onboarding job access to the controller API; leave empty to attach none.
+    sap_controller_credential: ""
 
   tasks:
-    - name: Ensure a password for the test users was provided
-      ansible.builtin.assert:
-        that:
-          - sap_user_password is defined
-          - sap_user_password | length > 0
-        fail_msg: "Pass the test user password with -e sap_user_password=<password>"
-
     - name: Create organization {{ sap_organization }}
       ansible.controller.organization:
         name: "{{ sap_organization }}"
@@ -89,3 +92,14 @@
         role: member
         state: present
       loop: "{{ sap_users }}"
+
+    - name: Create job template {{ sap_job_template.name }}
+      ansible.controller.job_template:
+        name: "{{ sap_job_template.name }}"
+        organization: "{{ sap_organization }}"
+        project: "{{ sap_project.name }}"
+        playbook: "{{ sap_job_template.playbook }}"
+        inventory: "{{ sap_job_template.inventory }}"
+        credentials: "{{ [sap_controller_credential] if sap_controller_credential else omit }}"
+        job_type: run
+        state: present

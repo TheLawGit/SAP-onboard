@@ -4,7 +4,7 @@ Ansible playbooks for setting up the SAP organization in Ansible Automation Plat
 
 | Playbook | Purpose |
 |---|---|
-| `setup_sap_controller.yml` | Creates the SAP organization, its teams, project, inventories and test users. |
+| `setup_sap_controller.yml` | Creates the SAP organization, its teams, project, inventories, test users and the SAP Onboarding job template. |
 | `add_user_to_team.yml` | Adds a user to the SAP Executable team and grants the team its access. |
 | `create_onboarding_survey.yml` | Adds a survey to the **SAP Onboarding** job template that prompts for the inputs `add_user_to_team.yml` needs. |
 
@@ -20,7 +20,8 @@ Run `setup_sap_controller.yml` first; the other playbooks expect the objects it 
 | Teams | SAP Development, SAP Executable | In SAP |
 | Project | sap | Git, `https://github.com/TheLawGit/SAP-onboard.git`, branch `main`, updates from git on every job launch |
 | Inventories | SAP NonProd, SAP PROD | In SAP, created empty |
-| Users | sap-test-1, sap-test-2 | Members of the SAP organization |
+| Users | sap-test-1, sap-test-2 | Members of the SAP organization, password `Ansible123!` |
+| Job template | SAP Onboarding | Runs `add_user_to_team.yml` from the `sap` project against SAP NonProd |
 
 Objects that already exist are left as they are, and existing users' passwords are not reset.
 
@@ -69,10 +70,14 @@ export CONTROLLER_VERIFY_SSL=false      # optional, for self-signed certificates
 
 ### setup_sap_controller.yml
 
-The test users need a password, passed as a variable so it isn't stored in the repo:
+```bash
+ansible-playbook setup_sap_controller.yml
+```
+
+To let the SAP Onboarding job reach the controller API, attach an existing **Red Hat Ansible Automation Platform** credential:
 
 ```bash
-ansible-playbook setup_sap_controller.yml -e "sap_user_password=<password>"
+ansible-playbook setup_sap_controller.yml -e "sap_controller_credential=<credential name>"
 ```
 
 ### add_user_to_team.yml
@@ -101,12 +106,14 @@ ansible-playbook create_onboarding_survey.yml
 
 | Variable | Default | Description |
 |---|---|---|
-| `sap_user_password` | *(required)* | Password set on newly created test users. |
+| `sap_user_password` | `Ansible123!` | Password set on newly created test users. |
 | `sap_organization` | `SAP` | Organization to create. |
 | `sap_teams` | `SAP Development`, `SAP Executable` | Teams to create in the organization. |
 | `sap_project` | `sap` → this repo, branch `main` | Project name, git URL and branch. |
 | `sap_inventories_to_create` | `SAP NonProd`, `SAP PROD` | Inventories to create in the organization. |
 | `sap_users` | `sap-test-1`, `sap-test-2` | Users to create and add to the organization. |
+| `sap_job_template` | `SAP Onboarding` → `add_user_to_team.yml`, inventory `SAP NonProd` | Job template name, playbook and inventory. |
+| `sap_controller_credential` | `""` (none) | Controller API credential to attach to the job template. |
 
 ### add_user_to_team.yml
 
@@ -128,7 +135,9 @@ ansible-playbook create_onboarding_survey.yml
 ### setup_sap_controller.yml
 
 - The test users are added to the SAP organization but not to either team; use `add_user_to_team.yml` for that.
-- The **SAP Onboarding** job template is not created; create it from the `sap` project before running `create_onboarding_survey.yml`.
+- The test user password is stored in plain text in this repo; only use it for test accounts. Existing users' passwords are not changed.
+- The SAP Onboarding job template runs `add_user_to_team.yml`, which talks to the controller API. Without `sap_controller_credential` the job will fail at runtime because it has no controller connection details. The execution environment also needs the `ansible.controller` collection.
+- The survey is not created here; run `create_onboarding_survey.yml` after this playbook.
 
 ### add_user_to_team.yml
 
