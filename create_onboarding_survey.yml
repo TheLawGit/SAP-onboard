@@ -1,0 +1,54 @@
+---
+# Creates the survey on the "SAP Onboarding" job template in Ansible Automation Platform / AWX.
+#
+# Survey questions:
+#   User         - free-form text, required    -> variable: username
+#   Inventories  - multiple select, optional   -> variable: sap_inventories
+#                  choices: "SAP NonProd", "SAP PROD"
+#
+# The variable names match add_user_to_team.yml, so the job template can run that playbook directly.
+#
+# Usage:
+#   ansible-playbook create_onboarding_survey.yml
+#
+# Controller connection is read from environment variables:
+#   CONTROLLER_HOST, CONTROLLER_USERNAME, CONTROLLER_PASSWORD (or CONTROLLER_OAUTH_TOKEN)
+#   CONTROLLER_VERIFY_SSL=false   # optional, for self-signed certs
+#
+# Requires: ansible-galaxy collection install ansible.controller   (or awx.awx)
+
+- name: Create survey for SAP Onboarding job template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    job_template_name: "SAP Onboarding"
+
+  tasks:
+    - name: Add survey to {{ job_template_name }}
+      ansible.controller.job_template:
+        name: "{{ job_template_name }}"
+        survey_enabled: true
+        survey_spec:
+          name: "{{ job_template_name }}"
+          description: "User onboarding for SAP automation"
+          spec:
+            - question_name: "User"
+              question_description: "Controller username to onboard"
+              variable: username
+              type: text
+              required: true
+              min: 1
+              max: 1024
+              default: ""
+
+            - question_name: "Inventories"
+              question_description: "Inventories to grant the team Read access on"
+              variable: sap_inventories
+              type: multiselect
+              required: false
+              choices:
+                - "SAP NonProd"
+                - "SAP PROD"
+              default: ""

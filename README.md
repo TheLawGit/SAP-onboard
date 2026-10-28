@@ -1,8 +1,13 @@
 # SAP-onboard
 
-Ansible playbook for onboarding users to the SAP automation team in Ansible Automation Platform (AAP) / AWX.
+Ansible playbooks for onboarding users to the SAP automation team in Ansible Automation Platform (AAP) / AWX.
 
-## What it does
+| Playbook | Purpose |
+|---|---|
+| `add_user_to_team.yml` | Adds a user to TEAM SAP Executable and grants the team its access. |
+| `create_onboarding_survey.yml` | Adds a survey to the **SAP Onboarding** job template that prompts for the inputs `add_user_to_team.yml` needs. |
+
+## add_user_to_team.yml
 
 `add_user_to_team.yml` runs against the automation controller API and:
 
@@ -11,6 +16,17 @@ Ansible playbook for onboarding users to the SAP automation team in Ansible Auto
 3. **Gives the team read access to inventories.** Grants the team the **Read** role on each inventory named in `sap_inventories`. Team members can view hosts, groups and variables but can't change them. This step is skipped if the list is empty.
 
 Every step is idempotent: re-running the playbook changes nothing if the access is already in place.
+
+## create_onboarding_survey.yml
+
+`create_onboarding_survey.yml` enables a survey on the **SAP Onboarding** job template with two questions:
+
+| Question | Type | Required | Variable | Choices |
+|---|---|---|---|---|
+| **User** | Free-form text | Yes | `username` | – |
+| **Inventories** | Multiple select | No | `sap_inventories` | SAP NonProd, SAP PROD |
+
+The survey variables match `add_user_to_team.yml`. When the SAP Onboarding job template runs that playbook, whoever launches it is prompted for the user and can optionally pick inventories. A multiple-select answer is passed as a list. If no inventories are selected, the Read-access step is skipped.
 
 ## Requirements
 
@@ -34,6 +50,8 @@ export CONTROLLER_VERIFY_SSL=false      # optional, for self-signed certificates
 
 ## Usage
 
+### add_user_to_team.yml
+
 Add a user to the team and grant Execute on SAP Development:
 
 ```bash
@@ -46,7 +64,15 @@ Also grant Read on specific inventories (lists must be passed as JSON or from a 
 ansible-playbook add_user_to_team.yml -e '{"username": "jdoe", "sap_inventories": ["SAP Prod", "SAP QA"]}'
 ```
 
+### create_onboarding_survey.yml
+
+```bash
+ansible-playbook create_onboarding_survey.yml
+```
+
 ## Variables
+
+### add_user_to_team.yml
 
 | Variable | Default | Description |
 |---|---|---|
@@ -56,7 +82,21 @@ ansible-playbook add_user_to_team.yml -e '{"username": "jdoe", "sap_inventories"
 | `organization` | `SAP Executable` | Organization the team belongs to. |
 | `job_template_organization` | `SAP Development` | Organization whose job templates the team can execute. |
 
+### create_onboarding_survey.yml
+
+| Variable | Default | Description |
+|---|---|---|
+| `job_template_name` | `SAP Onboarding` | Job template the survey is added to. |
+
 ## Notes
+
+### add_user_to_team.yml
 
 - Inventory names are looked up across all organizations. If two organizations have an inventory with the same name, that task fails instead of guessing.
 - The playbook fails before making any changes if `username` is missing or the team can't be found in its organization.
+
+### create_onboarding_survey.yml
+
+- The **SAP Onboarding** job template must already exist; the playbook only enables and sets its survey. It's looked up by name only.
+- Re-running the playbook replaces the whole survey, overwriting any changes made in the UI.
+- The inventory choices must exactly match inventory names in the controller, or the Read grant in `add_user_to_team.yml` will fail.
